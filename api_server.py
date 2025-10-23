@@ -1,49 +1,89 @@
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 import os
-import requests
-from flask import Flask, jsonify
-from flask_cors import CORS
-
-app = Flask(__name__)
-CORS(app)
-
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-SEARCH_ENGINE_ID = "77a76b10e52a446f9"  # il tuo motore CSE già creato
-
-from flask import Flask, jsonify
-from flask_cors import CORS
 import json
-import os
+import requests
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/api/products", methods=["GET"])
+# 🔑 Chiavi da Render (non scriverle direttamente nel codice)
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+SEARCH_ENGINE_ID = "77a76b10e52a446f9"  # Il tuo motore di ricerca CSE già attivo
+
+# 📁 Percorso locale al file prodotti (statico)
+DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "all_products.json")
+
+
+# ✅ Endpoint base di test
+@app.route("/")
+def home():
+    return jsonify({"status": "ok", "message": "Spesetta API attiva 🚀"})
+
+
+# ✅ Endpoint prodotti statici (già funzionante)
+@app.route("/api/products")
 def get_products():
     try:
-        file_path = os.path.join(os.path.dirname(__file__), "data", "all_products.json")
-        
-        # Controlla se il file esiste
-        if not os.path.exists(file_path):
-            return jsonify({"errore": "File non trovato"}), 404
-
-        # Legge i dati dal file
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(DATA_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
-        # Verifica che contenga prodotti
-        if not data or "prodotti" not in data or len(data["prodotti"]) == 0:
-            return jsonify({"errore": "Nessun dato disponibile"}), 404
-
+        data["aggiornato_il"] = datetime.now().strftime("%Y-%m-%d")
         return jsonify(data)
+    except Exception as e:
+        return jsonify({"errore": str(e)}), 500
+
+
+# 🔍 Endpoint per cercare prodotti reali online
+@app.route("/api/search/<query>")
+def search_products(query):
+    try:
+        if not GOOGLE_API_KEY or not SEARCH_ENGINE_ID:
+            return jsonify({"errore": "Chiave API o motore di ricerca non configurati"}), 400
+
+        url = (
+            f"https://www.googleapis.com/customsearch/v1"
+            f"?key={GOOGLE_API_KEY}&cx={SEARCH_ENGINE_ID}&q={query}"
+        )
+
+        response = requests.get(url)
+        data = response.json()
+
+        prodotti = []
+        for item in data.get("items", []):
+            prodotti.append({
+                "nome": item.get("title", "Senza nome"),
+                "link": item.get("link", ""),
+                "descrizione": item.get("snippet", ""),
+                "img": item.get("pagemap", {}).get("cse_image", [{}])[0].get("src", ""),
+            })
+
+        return jsonify({
+            "query": query,
+            "totale": len(prodotti),
+            "risultati": prodotti
+        })
 
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
 
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({"status": "OK", "message": "API Spesetta attiva!"})
+# 🔄 Endpoint per aggiornare il file dei prodotti statici (facoltativo)
+@app.route("/api/update-products", methods=["POST"])
+def update_products():
+    try:
+        new_data = request.get_json()
+        if not new_data:
+            return jsonify({"errore": "Nessun dato ricevuto"}), 400
+
+        with open(DATA_PATH, "w", encoding="utf-8") as f:
+            json.dump(new_data, f, indent=2, ensure_ascii=False)
+
+        return jsonify({"status": "ok", "message": "File aggiornato con successo"})
+    except Exception as e:
+        return jsonify({"errore": str(e)}), 500
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
