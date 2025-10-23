@@ -2,76 +2,64 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime
 import requests
-import os
+import re
 
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 Inserisci qui la tua chiave API Google e il codice CX del motore di ricerca personalizzato
+# 🔑 Google API keys
 GOOGLE_API_KEY = "AIzaSyDIJHVwNyCaOj_1RzpZ0QjHwxbtLRq__xo"
 SEARCH_ENGINE_ID = "77a76b10e52a446f9"  # il tuo cx
 
+
+def estrai_prezzo(text):
+    """Estrae un prezzo da una stringa (es. '€1,49' o '1.49 EUR')"""
+    match = re.search(r"(\d+[.,]\d{1,2})", text)
+    return float(match.group(1).replace(",", ".")) if match else None
+
+
 @app.route("/")
 def home():
-    return jsonify({"status": "✅ API Spesetta attiva con Google Shopping", "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")})
-
-
-@app.route("/api/products", methods=["GET"])
-def get_products():
-    prodotti = [
-        {
-            "categoria": "colazione",
-            "nome": "Latte intero 1L",
-            "prezzo_medio": 1.34,
-            "img": "https://cdn.pixabay.com/photo/2017/08/07/21/07/milk-2607940_1280.jpg",
-            "supermercati": ["Esselunga", "Lidl"]
-        },
-        {
-            "categoria": "colazione",
-            "nome": "Corn flakes",
-            "prezzo_medio": 2.19,
-            "img": "https://cdn.pixabay.com/photo/2016/09/02/16/54/cornflakes-1634963_1280.jpg",
-            "supermercati": ["Conad", "Carrefour"]
-        },
-        {
-            "categoria": "pranzo",
-            "nome": "Pasta Barilla 500g",
-            "prezzo_medio": 1.09,
-            "img": "https://cdn.pixabay.com/photo/2017/09/16/19/29/pasta-2754994_1280.jpg",
-            "supermercati": ["Coop", "Esselunga"]
-        }
-    ]
     return jsonify({
-        "aggiornato_il": datetime.now().strftime("%Y-%m-%d"),
-        "prodotti": prodotti,
-        "totale": len(prodotti)
+        "status": "✅ API Spesetta attiva con Google Shopping",
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
     })
 
 
 @app.route("/api/search/<query>", methods=["GET"])
 def search_products(query):
-    """Cerca prodotti reali e prezzi tramite Google Shopping"""
+    """Cerca prodotti reali tramite Google Shopping e filtra i risultati"""
     try:
-        url = f"https://www.googleapis.com/customsearch/v1?q={query}&cx={SEARCH_ENGINE_ID}&key={GOOGLE_API_KEY}&searchType=image"
+        url = f"https://www.googleapis.com/customsearch/v1?q={query}+prezzo+site:esselunga.it|coop.it|lidl.it|conad.it|carrefour.it&cx={SEARCH_ENGINE_ID}&key={GOOGLE_API_KEY}"
         resp = requests.get(url)
         data = resp.json()
 
         if "items" not in data:
             return jsonify({"errore": "Nessun risultato trovato", "query": query})
 
-        prodotti = []
-        for item in data["items"][:10]:  # prendiamo max 10 risultati
-            prodotti.append({
-                "nome": item.get("title", "Prodotto sconosciuto"),
-                "link": item.get("link", ""),
-                "immagine": item["image"].get("thumbnailLink", "") if "image" in item else "",
-                "origine": "Google Shopping"
-            })
+        risultati = []
+        for item in data["items"]:
+            titolo = item.get("title", "")
+            link = item.get("link", "")
+            descr = item.get("snippet", "")
+            img = item.get("pagemap", {}).get("cse_image", [{}])[0].get("src", "")
+            prezzo = estrai_prezzo(titolo + " " + descr)
+
+            if any(s in link for s in ["esselunga", "coop", "conad", "carrefour", "lidl"]):
+                risultati.append({
+                    "nome": titolo.strip(),
+                    "link": link,
+                    "img": img,
+                    "descrizione": descr,
+                    "prezzo": prezzo if prezzo else "ND",
+                    "fonte": next((s.capitalize() for s in ["esselunga", "coop", "conad", "carrefour", "lidl"] if s in link), "Altro")
+                })
 
         return jsonify({
             "aggiornato_il": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "query": query,
-            "risultati": prodotti
+            "totale": len(risultati),
+            "risultati": risultati
         })
 
     except Exception as e:
