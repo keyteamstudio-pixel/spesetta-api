@@ -1,3 +1,14 @@
+import os
+import requests
+from flask import Flask, jsonify
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app)
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+SEARCH_ENGINE_ID = "77a76b10e52a446f9"  # il tuo motore CSE già creato
+
 from flask import Flask, jsonify
 from flask_cors import CORS
 import json
