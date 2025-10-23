@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app)
 
 # 🔑 Inserisci qui la tua chiave e il CX del motore Programmable Search
-GOOGLE_API_KEY = "INSERISCI_LA_TUA_API_KEY"
+GOOGLE_API_KEY = "AIzaSyA0MRVGXyBUlD4Fc-qBCiF0C2waCyWULns"
 CX = "35a05940ca6894c70"
 
 @app.route("/")
