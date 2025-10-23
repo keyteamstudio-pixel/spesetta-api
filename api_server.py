@@ -1,89 +1,87 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import os
-import json
-import requests
 from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 Chiavi da Render (non scriverle direttamente nel codice)
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-SEARCH_ENGINE_ID = "77a76b10e52a446f9"  # Il tuo motore di ricerca CSE già attivo
-
-# 📁 Percorso locale al file prodotti (statico)
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "all_products.json")
-
-
-# ✅ Endpoint base di test
 @app.route("/")
 def home():
-    return jsonify({"status": "ok", "message": "Spesetta API attiva 🚀"})
+    return jsonify({"status": "API Spesetta attiva ✅", "data": datetime.now().strftime("%Y-%m-%d %H:%M")})
 
 
-# ✅ Endpoint prodotti statici (già funzionante)
-@app.route("/api/products")
+@app.route("/api/products", methods=["GET"])
 def get_products():
-    try:
-        with open(DATA_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        data["aggiornato_il"] = datetime.now().strftime("%Y-%m-%d")
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({"errore": str(e)}), 500
+    prodotti = [
+        {
+            "categoria": "colazione",
+            "nome": "Latte intero 1L",
+            "prezzo_medio": 1.34,
+            "img": "https://cdn.pixabay.com/photo/2017/08/07/21/07/milk-2607940_1280.jpg",
+            "supermercati": ["Esselunga", "Lidl"]
+        },
+        {
+            "categoria": "colazione",
+            "nome": "Corn flakes",
+            "prezzo_medio": 2.19,
+            "img": "https://cdn.pixabay.com/photo/2016/09/02/16/54/cornflakes-1634963_1280.jpg",
+            "supermercati": ["Conad", "Carrefour"]
+        },
+        {
+            "categoria": "merenda",
+            "nome": "Yogurt alla frutta",
+            "prezzo_medio": 1.10,
+            "img": "https://cdn.pixabay.com/photo/2017/04/10/10/23/yogurt-2218232_1280.jpg",
+            "supermercati": ["Coop", "Esselunga"]
+        },
+        {
+            "categoria": "pranzo",
+            "nome": "Pasta Barilla 500g",
+            "prezzo_medio": 1.09,
+            "img": "https://cdn.pixabay.com/photo/2017/09/16/19/29/pasta-2754994_1280.jpg",
+            "supermercati": ["Coop", "Esselunga"]
+        },
+        {
+            "categoria": "pranzo",
+            "nome": "Passata di pomodoro",
+            "prezzo_medio": 1.49,
+            "img": "https://cdn.pixabay.com/photo/2021/01/30/17/49/tomato-sauce-5965600_1280.jpg",
+            "supermercati": ["Conad", "Coop"]
+        },
+        {
+            "categoria": "cena",
+            "nome": "Petto di pollo 300g",
+            "prezzo_medio": 3.80,
+            "img": "https://cdn.pixabay.com/photo/2019/02/22/20/31/chicken-breast-4012183_1280.jpg",
+            "supermercati": ["Carrefour", "Lidl"]
+        },
+        {
+            "categoria": "cena",
+            "nome": "Verdure grigliate",
+            "prezzo_medio": 3.50,
+            "img": "https://cdn.pixabay.com/photo/2017/08/10/01/09/vegetables-2619779_1280.jpg",
+            "supermercati": ["Lidl", "Esselunga"]
+        }
+    ]
+
+    return jsonify({
+        "aggiornato_il": datetime.now().strftime("%Y-%m-%d"),
+        "prodotti": prodotti,
+        "totale": len(prodotti)
+    })
 
 
-# 🔍 Endpoint per cercare prodotti reali online
-@app.route("/api/search/<query>")
+# Endpoint futuro (in sviluppo): integrazione Google Shopping
+@app.route("/api/search/<query>", methods=["GET"])
 def search_products(query):
-    try:
-        if not GOOGLE_API_KEY or not SEARCH_ENGINE_ID:
-            return jsonify({"errore": "Chiave API o motore di ricerca non configurati"}), 400
-
-        url = (
-            f"https://www.googleapis.com/customsearch/v1"
-            f"?key={GOOGLE_API_KEY}&cx={SEARCH_ENGINE_ID}&q={query}"
-        )
-
-        response = requests.get(url)
-        data = response.json()
-
-        prodotti = []
-        for item in data.get("items", []):
-            prodotti.append({
-                "nome": item.get("title", "Senza nome"),
-                "link": item.get("link", ""),
-                "descrizione": item.get("snippet", ""),
-                "img": item.get("pagemap", {}).get("cse_image", [{}])[0].get("src", ""),
-            })
-
-        return jsonify({
-            "query": query,
-            "totale": len(prodotti),
-            "risultati": prodotti
-        })
-
-    except Exception as e:
-        return jsonify({"errore": str(e)}), 500
-
-
-# 🔄 Endpoint per aggiornare il file dei prodotti statici (facoltativo)
-@app.route("/api/update-products", methods=["POST"])
-def update_products():
-    try:
-        new_data = request.get_json()
-        if not new_data:
-            return jsonify({"errore": "Nessun dato ricevuto"}), 400
-
-        with open(DATA_PATH, "w", encoding="utf-8") as f:
-            json.dump(new_data, f, indent=2, ensure_ascii=False)
-
-        return jsonify({"status": "ok", "message": "File aggiornato con successo"})
-    except Exception as e:
-        return jsonify({"errore": str(e)}), 500
+    # Placeholder per l'integrazione API Google Shopping
+    # Nel prossimo step useremo la tua chiave API per ottenere i prezzi veri
+    return jsonify({
+        "query": query,
+        "risultati": [],
+        "nota": "🔍 Ricerca prezzi reali in arrivo nella prossima versione!"
+    })
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=10000)
