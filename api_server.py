@@ -4,12 +4,13 @@ from openai import OpenAI
 import os
 import json
 
-# === CONFIG BASE ===
+# === CONFIGURAZIONE BASE ===
 app = Flask(__name__)
 CORS(app)
 
-# === API KEY ===
+# === CHIAVE API ===
 api_key = os.getenv("OPENAI_API_KEY", "").strip()
+
 if not api_key:
     print("⚠️ Nessuna chiave OpenAI trovata. Imposta OPENAI_API_KEY su Render.")
 else:
@@ -20,30 +21,35 @@ client = OpenAI(api_key=api_key)
 
 @app.route("/")
 def home():
+    """Endpoint base per verificare che l’API sia attiva"""
     return jsonify({"status": "✅ Spesetta API attiva e funzionante"})
 
 @app.route("/api/search/<query>")
 def cerca_prodotti(query):
+    """
+    Endpoint principale: genera un elenco realistico di prodotti per la query specificata
+    """
     try:
         supermercato = request.args.get("supermercato", "Conad")
 
         prompt = f"""
         Sei l'assistente AI di Spesetta, l'app per la spesa intelligente.
-        L'utente sta cercando prodotti di "{supermercato}" relativi a "{query}".
-        Rispondi SOLO in JSON con lo schema seguente:
+        L'utente cerca prodotti del supermercato "{supermercato}" relativi a "{query}".
+        Rispondi SOLO in formato JSON seguendo esattamente questo schema:
 
         {{
           "query": "{query}",
           "risultati": [
             {{
               "nome": "Nome del prodotto",
-              "prezzo": "Prezzo stimato in euro",
-              "img": "URL immagine prodotto (se disponibile)",
-              "link": "URL alla pagina del prodotto"
+              "prezzo": "Prezzo realistico in euro (es. 2.49 €)",
+              "img": "URL immagine del prodotto (reale o stock)",
+              "link": "URL della pagina prodotto (se disponibile)"
             }}
           ]
         }}
-        Includi 5-8 prodotti realistici in italiano.
+
+        Genera da 5 a 8 prodotti realistici in italiano.
         """
 
         response = client.chat.completions.create(
@@ -52,7 +58,7 @@ def cerca_prodotti(query):
                 {"role": "system", "content": "Sei un assistente AI esperto di spesa e supermercati italiani."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.5,
+            temperature=0.5
         )
 
         text = response.choices[0].message.content.strip()
