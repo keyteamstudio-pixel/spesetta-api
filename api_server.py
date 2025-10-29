@@ -6,23 +6,33 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# 1️⃣ Recupera la chiave dall'ambiente
+# --- DEBUG LOG: controlliamo le variabili d'ambiente ---
+print("📦 Variabili d'ambiente attive su Render:")
+for k in os.environ.keys():
+    if "OPENAI" in k or "API" in k:
+        print(f"➡️ {k} = {os.environ.get(k)[:10]}********")
+
+# --- Carichiamo la chiave ---
 api_key = os.environ.get("OPENAI_API_KEY")
 
 if not api_key:
-    print("⚠️ Nessuna chiave OpenAI trovata. Imposta OPENAI_API_KEY su Render.")
-else:
-    print("✅ Chiave OpenAI caricata correttamente.")
-
-# 2️⃣ Inizializza il client in modo sicuro
-try:
-    client = OpenAI(api_key=api_key)
-except Exception as e:
-    print(f"Errore inizializzazione OpenAI: {e}")
+    print("❌ Nessuna chiave OpenAI trovata in ambiente!")
     client = None
+else:
+    print("✅ Chiave OpenAI trovata, inizializzo client…")
+    try:
+        client = OpenAI(api_key=api_key)
+        print("🟢 Client OpenAI inizializzato correttamente!")
+    except Exception as e:
+        print(f"⚠️ Errore inizializzazione client: {e}")
+        client = None
 
 
-# 3️⃣ Endpoint principale
+@app.route("/")
+def home():
+    return "🧠 Server attivo - debug in console Render"
+
+
 @app.route("/api/search/<query>", methods=["GET"])
 def search_products(query):
     if not client:
@@ -30,9 +40,8 @@ def search_products(query):
 
     try:
         prompt = f"""
-        Crea un elenco JSON di 5 prodotti realistici che si trovano nei supermercati italiani
-        legati a '{query}', includendo per ciascuno: nome, descrizione breve e prezzo medio in euro.
-        Rispondi solo con JSON puro, senza testo aggiuntivo.
+        Elenca in JSON 5 prodotti italiani realistici legati a '{query}' con nome, descrizione e prezzo medio in euro.
+        Solo JSON, nessun testo extra.
         """
 
         response = client.responses.create(
@@ -46,11 +55,6 @@ def search_products(query):
 
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
-
-
-@app.route("/")
-def home():
-    return "🟢 API di Spesetta attiva e funzionante!"
 
 
 if __name__ == "__main__":
