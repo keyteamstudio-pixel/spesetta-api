@@ -1,49 +1,80 @@
-from flask import Flask, request, jsonify
-import openai
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 import os
+import openai
 
+# Inizializzazione Flask
 app = Flask(__name__)
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+CORS(app)
 
+# === LETTURA CHIAVE OPENAI ===
+# La legge da Render, ma anche se è formattata male o ha \n funziona comunque.
+api_key = os.getenv("OPENAI_API_KEY", "").replace("\n", "").strip()
+
+if not api_key:
+    print("⚠️ ERRORE: nessuna chiave OPENAI_API_KEY trovata nelle variabili d'ambiente.")
+else:
+    print("✅ Chiave OpenAI caricata correttamente.")
+
+openai.api_key = api_key
+
+
+# === ENDPOINT DI TEST ===
 @app.route("/")
 def home():
-    return "✅ Spesetta API attiva e funzionante!"
+    return jsonify({"status": "Spesetta API online ✅"})
 
+
+# === ENDPOINT DI RICERCA PRODOTTI ===
 @app.route("/api/search/<query>")
-def search_products(query):
-    supermercato = request.args.get("supermercato", "generico")
-    budget = request.args.get("budget", "50")
-
-    prompt = f"""
-    Genera una lista di 5 prodotti alimentari per una spesa intelligente.
-    Ogni prodotto deve essere coerente con il supermercato: {supermercato}.
-    Mostra prodotti realistici venduti in Italia con un prezzo medio.
-    Rispondi in JSON, in questo formato preciso:
-
-    [
-      {{
-        "nome": "...",
-        "descrizione": "...",
-        "prezzo": 1.79,
-        "img": "URL immagine prodotto",
-        "fonte": "{supermercato}"
-      }},
-      ...
-    ]
-
-    Assicurati che i prezzi siano verosimili (0.50–20.00 € a seconda del prodotto).
-    """
-
+def cerca_prodotti(query):
     try:
-        completion = openai.chat.completions.create(
+        supermercato = request.args.get("supermercato", "conad")
+
+        prompt = f"""
+        Sei un assistente che fornisce informazioni sui prodotti alimentari venduti online nei supermercati italiani.
+        Utente cerca: "{query}" nel supermercato "{supermercato}".
+        Restituisci una lista di prodotti reali con questo formato JSON:
+
+        {{
+          "query": "...",
+          "risultati": [
+            {{
+              "nome": "...",
+              "prezzo": "...",
+              "img": "...",
+              "link": "..."
+            }}
+          ]
+        }}
+        """
+
+        # Chiamata a OpenAI
+        response = openai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[
+                {"role": "system", "content": "Sei un assistente per la spesa intelligente."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5
         )
-        testo = completion.choices[0].message.content.strip()
-        return jsonify({"query": query, "risultati": eval(testo)})
+
+        text = response.choices[0].message.content
+
+        # Tentativo di parsing del JSON generato
+        import json
+        try:
+            result = json.loads(text)
+        except:
+            result = {"query": query, "risultati": [{"nome": "Errore nel parsing", "prezzo": "-", "img": "", "link": ""}]}
+
+        return jsonify(result)
+
     except Exception as e:
-        return jsonify({"errore": str(e)}), 500
+        return jsonify({"errore": str(e)})
 
 
+# === AVVIO SERVER ===
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
