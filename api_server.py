@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 from flask_cors import CORS
 import os
 import requests
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -16,7 +17,7 @@ else:
 
 @app.route("/")
 def home():
-    return "🟢 API Spesetta attiva e funzionante (requests mode)"
+    return "🟢 API Spesetta attiva e funzionante (v1.1 - requests mode)"
 
 
 @app.route("/api/search/<query>", methods=["GET"])
@@ -24,30 +25,49 @@ def search_products(query):
     if not api_key:
         return jsonify({"errore": "Chiave API mancante"}), 500
 
-    try:
-        prompt = f"""
-        Crea un elenco JSON di 5 prodotti da supermercato realistici legati a '{query}'.
-        Ogni prodotto deve avere: nome, breve descrizione e prezzo medio in euro.
-        Rispondi SOLO con JSON puro, senza testo aggiuntivo.
-        """
+    prompt = f"""
+    Genera un elenco JSON con 5 prodotti da supermercato legati a '{query}'.
+    Ogni oggetto deve avere:
+    - "nome"
+    - "descrizione"
+    - "prezzo" (in euro, numero)
+    Rispondi solo con JSON valido, senza testo extra.
+    """
 
+    try:
         response = requests.post(
-            "https://api.openai.com/v1/responses",
+            "https://api.openai.com/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             },
             json={
-                "model": "gpt-4.1-mini",
-                "input": prompt,
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "Sei un assistente utile che genera dati JSON puliti."},
+                    {"role": "user", "content": prompt}
+                ],
                 "temperature": 0.7
-            }
+            },
+            timeout=30
         )
 
         data = response.json()
-        output = data["output"][0]["content"][0]["text"]
 
-        return jsonify({"query": query, "risultati": output})
+        # Debug in console per capire cosa arriva da OpenAI
+        print("📦 Risposta OpenAI:", json.dumps(data, indent=2))
+
+        if "choices" in data and len(data["choices"]) > 0:
+            testo = data["choices"][0]["message"]["content"]
+
+            try:
+                prodotti = json.loads(testo)
+            except json.JSONDecodeError:
+                prodotti = {"raw": testo}
+
+            return jsonify({"query": query, "risultati": prodotti})
+        else:
+            return jsonify({"errore": "Risposta OpenAI senza dati validi", "dettaglio": data}), 500
 
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
