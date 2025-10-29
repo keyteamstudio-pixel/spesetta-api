@@ -1,46 +1,37 @@
-from flask import Flask, jsonify
-from flask_cors import CORS
-import requests
+from flask import Flask, request, jsonify
+import openai
 import os
 
 app = Flask(__name__)
-CORS(app)
-
-# 🔑 Inserisci qui la tua chiave e il CX del motore Programmable Search
-GOOGLE_API_KEY = "AIzaSyA0MRVGXyBUlD4Fc-qBCiF0C2waCyWULns"
-CX = "35a05940ca6894c70"
+openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 @app.route("/")
 def home():
-    return jsonify({"status": "API Spesetta attiva 🚀"})
+    return "✅ Spesetta API attiva e funzionante!"
 
 @app.route("/api/search/<query>")
 def search_products(query):
-    url = "https://www.googleapis.com/customsearch/v1"
-    params = {
-        "key": GOOGLE_API_KEY,
-        "cx": CX,
-        "q": query,
-        "searchType": "image"
-    }
+    supermercato = request.args.get("supermercato", "generico")
+    budget = request.args.get("budget", "50")
+
+    prompt = f"""
+    Genera una lista di 5 prodotti o ricette per una spesa intelligente.
+    Supermercato: {supermercato}.
+    Budget: {budget} euro.
+    Query: {query}.
+    Rispondi in JSON con campi:
+    nome, descrizione, prezzo_stimato, img, link.
+    """
+
     try:
-        response = requests.get(url, params=params)
-        data = response.json()
-        
-        results = []
-        if "items" in data:
-            for item in data["items"]:
-                results.append({
-                    "nome": item.get("title", "Prodotto"),
-                    "descrizione": item.get("snippet", ""),
-                    "img": item.get("link", ""),
-                    "link": item.get("image", {}).get("contextLink", ""),
-                    "fonte": "Google"
-                })
-        return jsonify({"query": query, "risultati": results, "totale": len(results)})
-    
+        completion = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        risposta = completion.choices[0].message.content.strip()
+        return jsonify({"risultati": risposta})
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=5000)
