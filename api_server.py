@@ -9,7 +9,7 @@ app = Flask(__name__)
 CORS(app)
 
 # === API KEY ===
-api_key = os.getenv("OPENAI_API_KEY", "").replace("\n", "").strip()
+api_key = os.getenv("OPENAI_API_KEY", "").strip()
 if not api_key:
     print("⚠️ Nessuna chiave OpenAI trovata. Imposta OPENAI_API_KEY su Render.")
 else:
@@ -28,21 +28,22 @@ def cerca_prodotti(query):
         supermercato = request.args.get("supermercato", "Conad")
 
         prompt = f"""
-        Sei l'assistente AI dell'app Spesetta, un'app italiana per la spesa intelligente.
-        L'utente cerca prodotti del supermercato "{supermercato}" relativi a "{query}".
-        Restituisci una risposta SOLO in formato JSON con questo schema:
+        Sei l'assistente AI di Spesetta, l'app per la spesa intelligente.
+        L'utente sta cercando prodotti di "{supermercato}" relativi a "{query}".
+        Rispondi SOLO in JSON con lo schema seguente:
+
         {{
           "query": "{query}",
           "risultati": [
             {{
-              "nome": "Nome prodotto",
-              "prezzo": "Prezzo stimato (es. 1.49 €)",
-              "img": "URL immagine prodotto",
-              "link": "URL pagina prodotto"
+              "nome": "Nome del prodotto",
+              "prezzo": "Prezzo stimato in euro",
+              "img": "URL immagine prodotto (se disponibile)",
+              "link": "URL alla pagina del prodotto"
             }}
           ]
         }}
-        Mostra 5-8 prodotti realistici, scritti in italiano.
+        Includi 5-8 prodotti realistici in italiano.
         """
 
         response = client.chat.completions.create(
@@ -51,19 +52,18 @@ def cerca_prodotti(query):
                 {"role": "system", "content": "Sei un assistente AI esperto di spesa e supermercati italiani."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.5
+            temperature=0.5,
         )
 
         text = response.choices[0].message.content.strip()
-
-        # --- Parsing robusto JSON ---
         start = text.find("{")
         end = text.rfind("}") + 1
         json_text = text[start:end] if start != -1 else "{}"
+
         try:
             data = json.loads(json_text)
         except json.JSONDecodeError:
-            data = {"errore": "Formato JSON non valido dalla risposta AI"}
+            data = {"errore": "Risposta AI non in formato JSON valido"}
 
         return jsonify(data)
 
