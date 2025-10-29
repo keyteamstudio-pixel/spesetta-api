@@ -1,82 +1,57 @@
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from openai import OpenAI
 import os
-import json
+from openai import OpenAI
 
-# === CONFIGURAZIONE BASE ===
 app = Flask(__name__)
 CORS(app)
 
-# === CHIAVE API ===
-api_key = os.getenv("OPENAI_API_KEY", "").strip()
+# 1️⃣ Recupera la chiave dall'ambiente
+api_key = os.environ.get("OPENAI_API_KEY")
 
 if not api_key:
     print("⚠️ Nessuna chiave OpenAI trovata. Imposta OPENAI_API_KEY su Render.")
 else:
     print("✅ Chiave OpenAI caricata correttamente.")
 
-# === CLIENT OPENAI ===
-client = OpenAI(api_key=api_key)
+# 2️⃣ Inizializza il client in modo sicuro
+try:
+    client = OpenAI(api_key=api_key)
+except Exception as e:
+    print(f"Errore inizializzazione OpenAI: {e}")
+    client = None
+
+
+# 3️⃣ Endpoint principale
+@app.route("/api/search/<query>", methods=["GET"])
+def search_products(query):
+    if not client:
+        return jsonify({"errore": "OpenAI client non inizializzato"}), 500
+
+    try:
+        prompt = f"""
+        Crea un elenco JSON di 5 prodotti realistici che si trovano nei supermercati italiani
+        legati a '{query}', includendo per ciascuno: nome, descrizione breve e prezzo medio in euro.
+        Rispondi solo con JSON puro, senza testo aggiuntivo.
+        """
+
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt,
+            temperature=0.7,
+        )
+
+        testo = response.output[0].content[0].text
+        return jsonify({"query": query, "risultati": testo})
+
+    except Exception as e:
+        return jsonify({"errore": str(e)}), 500
+
 
 @app.route("/")
 def home():
-    """Endpoint base per verificare che l’API sia attiva"""
-    return jsonify({"status": "✅ Spesetta API attiva e funzionante"})
+    return "🟢 API di Spesetta attiva e funzionante!"
 
-@app.route("/api/search/<query>")
-def cerca_prodotti(query):
-    """
-    Endpoint principale: genera un elenco realistico di prodotti per la query specificata
-    """
-    try:
-        supermercato = request.args.get("supermercato", "Conad")
-
-        prompt = f"""
-        Sei l'assistente AI di Spesetta, l'app per la spesa intelligente.
-        L'utente cerca prodotti del supermercato "{supermercato}" relativi a "{query}".
-        Rispondi SOLO in formato JSON seguendo esattamente questo schema:
-
-        {{
-          "query": "{query}",
-          "risultati": [
-            {{
-              "nome": "Nome del prodotto",
-              "prezzo": "Prezzo realistico in euro (es. 2.49 €)",
-              "img": "URL immagine del prodotto (reale o stock)",
-              "link": "URL della pagina prodotto (se disponibile)"
-            }}
-          ]
-        }}
-
-        Genera da 5 a 8 prodotti realistici in italiano.
-        """
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Sei un assistente AI esperto di spesa e supermercati italiani."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.5
-        )
-
-        text = response.choices[0].message.content.strip()
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        json_text = text[start:end] if start != -1 else "{}"
-
-        try:
-            data = json.loads(json_text)
-        except json.JSONDecodeError:
-            data = {"errore": "Risposta AI non in formato JSON valido"}
-
-        return jsonify(data)
-
-    except Exception as e:
-        print("❌ Errore:", e)
-        return jsonify({"errore": str(e)})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000)
