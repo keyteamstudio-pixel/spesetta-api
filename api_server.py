@@ -1,77 +1,77 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
+from openai import OpenAI
 import os
-import requests
 import json
+import re
 
+# === CONFIGURAZIONE BASE ===
 app = Flask(__name__)
 CORS(app)
 
+# Legge la chiave API OpenAI dalle variabili d’ambiente di Render
 api_key = os.environ.get("OPENAI_API_KEY")
 
-if not api_key:
-    print("❌ Nessuna chiave trovata in ambiente.")
+client = None
+if api_key:
+    try:
+        client = OpenAI(api_key=api_key)
+        print("✅ Client OpenAI inizializzato correttamente.")
+    except Exception as e:
+        print(f"⚠️ Errore inizializzazione client: {str(e)}")
 else:
-    print("✅ Chiave OpenAI trovata correttamente.")
+    print("🚫 Nessuna chiave OpenAI trovata. Imposta OPENAI_API_KEY su Render.")
 
 
+# === ROTTA DI TEST SEMPLICE ===
 @app.route("/")
 def home():
-    return "🟢 API Spesetta attiva e funzionante (v1.1 - requests mode)"
+    return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
 
+# === ENDPOINT DI RICERCA ===
 @app.route("/api/search/<query>", methods=["GET"])
-def search_products(query):
-    if not api_key:
-        return jsonify({"errore": "Chiave API mancante"}), 500
-
-    prompt = f"""
-    Genera un elenco JSON con 5 prodotti da supermercato legati a '{query}'.
-    Ogni oggetto deve avere:
-    - "nome"
-    - "descrizione"
-    - "prezzo" (in euro, numero)
-    Rispondi solo con JSON valido, senza testo extra.
-    """
+def search(query):
+    if not client:
+        return jsonify({"errore": "OpenAI client non inizializzato"}), 500
 
     try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": "Sei un assistente utile che genera dati JSON puliti."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.7
-            },
-            timeout=30
+        prompt = f"""
+        Genera una lista in formato JSON di 5 prodotti alimentari realistici
+        per la query "{query}", ciascuno con:
+        - nome
+        - descrizione breve
+        - prezzo realistico in euro (float)
+        Rispondi SOLO con JSON valido.
+        """
+
+        # Chiamata al modello OpenAI
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": "Sei un assistente che genera dati realistici per un supermercato italiano."},
+                      {"role": "user", "content": prompt}],
+            temperature=0.7
         )
 
-        data = response.json()
+        output = response.choices[0].message.content.strip()
 
-        # Debug in console per capire cosa arriva da OpenAI
-        print("📦 Risposta OpenAI:", json.dumps(data, indent=2))
+        # ✅ Estrae e pulisce il JSON generato (rimuove ```json ... ```)
+        try:
+            match = re.search(r"```json\s*(.*?)\s*```", output, re.DOTALL)
+            if match:
+                parsed = json.loads(match.group(1))
+            else:
+                parsed = json.loads(output)
+        except Exception as e:
+            parsed = {"errore": f"Parsing JSON fallito: {str(e)}", "raw": output}
 
-        if "choices" in data and len(data["choices"]) > 0:
-            testo = data["choices"][0]["message"]["content"]
-
-            try:
-                prodotti = json.loads(testo)
-            except json.JSONDecodeError:
-                prodotti = {"raw": testo}
-
-            return jsonify({"query": query, "risultati": prodotti})
-        else:
-            return jsonify({"errore": "Risposta OpenAI senza dati validi", "dettaglio": data}), 500
+        return jsonify({"query": query, "risultati": parsed})
 
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
 
+# === AVVIO SERVER ===
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
