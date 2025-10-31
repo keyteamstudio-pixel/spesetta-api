@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 import openai
 import os
@@ -8,14 +8,13 @@ import re
 app = Flask(__name__)
 CORS(app)
 
-# 🔹 Leggi chiave API direttamente in openai lib
+# 🔹 Legge la chiave API
 api_key = os.environ.get("OPENAI_API_KEY")
-
 if api_key:
     openai.api_key = api_key
-    print(f"✅ Chiave OpenAI caricata correttamente: {api_key[:10]}...")
+    print(f"✅ Chiave OpenAI caricata: {api_key[:10]}...")
 else:
-    print("🚫 Nessuna chiave OPENAI_API_KEY trovata!")
+    print("🚫 Nessuna chiave trovata!")
 
 @app.route("/")
 def home():
@@ -33,28 +32,32 @@ def search(query):
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
         return jsonify({"errore": "OpenAI client non inizializzato"}), 500
-    openai.api_key = key  # Forza ogni volta per sicurezza
+    openai.api_key = key
 
     try:
         prompt = f"""
-        Genera una lista JSON di 5 prodotti alimentari realistici per la query "{query}".
-        Ogni prodotto deve avere: nome, descrizione breve, prezzo in euro (float).
-        Rispondi solo con JSON valido.
+        Genera un elenco di 5 prodotti alimentari realistici per la ricerca "{query}".
+        Ogni prodotto deve contenere:
+        - nome
+        - descrizione breve
+        - prezzo realistico in euro (float)
+        Rispondi SOLO con un JSON valido.
         """
 
-        # ✅ usa openai.ChatCompletion.create (compatibile con Render)
+        # ⚙️ Metodo compatibile con openai 1.37.x
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Sei un assistente che genera prodotti realistici per un supermercato italiano."},
+                {"role": "system", "content": "Sei un assistente che genera dati realistici per un supermercato italiano."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=0.7,
+            max_tokens=400
         )
 
         output = response["choices"][0]["message"]["content"].strip()
 
-        # pulizia e parsing JSON
+        # 🧹 Pulizia e parsing del JSON
         match = re.search(r"```json\s*(.*?)\s*```", output, re.DOTALL)
         if match:
             parsed = json.loads(match.group(1))
