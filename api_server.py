@@ -1,21 +1,20 @@
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
 import os
-import json
-import re
 
 app = Flask(__name__)
 CORS(app)
 
-# 🔹 Inizializza client OpenAI
+# Recupera la chiave dalle variabili d'ambiente
 api_key = os.environ.get("OPENAI_API_KEY")
-if api_key:
-    client = OpenAI(api_key=api_key)
-    print(f"✅ Chiave OpenAI caricata correttamente: {api_key[:10]}...")
-else:
+
+if not api_key:
+    print("❌ Errore: variabile OPENAI_API_KEY non trovata su Render.")
     client = None
-    print("🚫 Nessuna chiave OPENAI_API_KEY trovata!")
+else:
+    print("✅ Chiave OpenAI trovata. Inizializzo client...")
+    client = OpenAI(api_key=api_key)
 
 @app.route("/")
 def home():
@@ -23,10 +22,10 @@ def home():
 
 @app.route("/api/test-key")
 def test_key():
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        return jsonify({"status": "error", "message": "Chiave non trovata"})
-    return jsonify({"status": "ok", "message": f"Chiave trovata: {key[:10]}..."})
+    if api_key:
+        return jsonify({"status": "ok", "message": f"Chiave trovata: {api_key[:10]}..."})
+    else:
+        return jsonify({"errore": "Chiave OpenAI non trovata."}), 500
 
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
@@ -35,39 +34,27 @@ def search(query):
 
     try:
         prompt = f"""
-        Genera un elenco di 5 prodotti alimentari realistici per la ricerca "{query}".
-        Ogni prodotto deve contenere:
+        Genera 5 prodotti realistici trovabili in un supermercato italiano per la ricerca "{query}".
+        Per ogni prodotto includi:
         - nome
-        - descrizione breve
-        - prezzo realistico in euro (float)
-        Rispondi SOLO con un JSON valido.
+        - breve descrizione
+        - prezzo approssimativo in euro (float)
+        Rispondi in JSON.
         """
 
-        # ✅ nuova sintassi compatibile
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "Sei un assistente che genera prodotti realistici per supermercati italiani."},
-                {"role": "user", "content": prompt}
-            ],
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=prompt,
             temperature=0.7
         )
 
-        output = response.choices[0].message.content.strip()
-
-        # 🧹 Estrazione JSON
-        match = re.search(r"```json\s*(.*?)\s*```", output, re.DOTALL)
-        if match:
-            parsed = json.loads(match.group(1))
-        else:
-            parsed = json.loads(output)
-
-        return jsonify({"query": query, "risultati": parsed})
+        # Estrai testo puro dall’output
+        text = response.output[0].content[0].text
+        return jsonify({"query": query, "risultati": text})
 
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=10000)
