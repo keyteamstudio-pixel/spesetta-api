@@ -1,6 +1,6 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-import openai
+from openai import OpenAI
 import os
 import json
 import re
@@ -8,13 +8,14 @@ import re
 app = Flask(__name__)
 CORS(app)
 
-# 🔹 Legge la chiave API
+# 🔹 Inizializza client OpenAI
 api_key = os.environ.get("OPENAI_API_KEY")
 if api_key:
-    openai.api_key = api_key
-    print(f"✅ Chiave OpenAI caricata: {api_key[:10]}...")
+    client = OpenAI(api_key=api_key)
+    print(f"✅ Chiave OpenAI caricata correttamente: {api_key[:10]}...")
 else:
-    print("🚫 Nessuna chiave trovata!")
+    client = None
+    print("🚫 Nessuna chiave OPENAI_API_KEY trovata!")
 
 @app.route("/")
 def home():
@@ -29,10 +30,8 @@ def test_key():
 
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
+    if not client:
         return jsonify({"errore": "OpenAI client non inizializzato"}), 500
-    openai.api_key = key
 
     try:
         prompt = f"""
@@ -44,20 +43,19 @@ def search(query):
         Rispondi SOLO con un JSON valido.
         """
 
-        # ⚙️ Metodo compatibile con openai 1.37.x
-        response = openai.ChatCompletion.create(
+        # ✅ nuova sintassi compatibile
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Sei un assistente che genera dati realistici per un supermercato italiano."},
+                {"role": "system", "content": "Sei un assistente che genera prodotti realistici per supermercati italiani."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=400
+            temperature=0.7
         )
 
-        output = response["choices"][0]["message"]["content"].strip()
+        output = response.choices[0].message.content.strip()
 
-        # 🧹 Pulizia e parsing del JSON
+        # 🧹 Estrazione JSON
         match = re.search(r"```json\s*(.*?)\s*```", output, re.DOTALL)
         if match:
             parsed = json.loads(match.group(1))
