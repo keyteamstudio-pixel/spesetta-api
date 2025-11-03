@@ -6,39 +6,48 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# === Lettura chiave ===
+# === 🔐 Lettura chiave OpenAI ===
 api_key = os.getenv("OPENAI_API_KEY")
+
 print("🔍 OPENAI_API_KEY:", "Trovata ✅" if api_key else "❌ NON trovata")
-
 client = None
-try:
+
+
+def init_openai_client():
+    """Inizializza il client OpenAI solo se la chiave è valida."""
+    global client
     if api_key:
-        os.environ["OPENAI_API_KEY"] = api_key  # Forza impostazione
-        client = OpenAI()  # nuovo SDK: legge la chiave dall’ambiente
-        print("✅ Client OpenAI inizializzato correttamente!")
+        try:
+            os.environ["OPENAI_API_KEY"] = api_key
+            client = OpenAI()
+            print("✅ Client OpenAI inizializzato correttamente!")
+        except Exception as e:
+            print("🚨 Errore durante inizializzazione OpenAI:", str(e))
     else:
-        print("⚠️ Nessuna chiave trovata in ambiente.")
-except Exception as e:
-    print("🚨 Errore inizializzazione client:", e)
+        print("⚠️ Nessuna chiave trovata in ambiente, impossibile inizializzare.")
 
 
-# === Test base ===
+# === 🌐 Endpoint base ===
 @app.route("/")
 def home():
     return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
 
-# === Test chiave ===
+# === 🔑 Test chiave ===
 @app.route("/api/test-key")
 def test_key():
     if api_key:
-        return jsonify({"status": "ok", "message": f"Chiave letta: {api_key[:10]}..."})
+        return jsonify({"status": "ok", "message": f"Chiave trovata: {api_key[:10]}..."})
     return jsonify({"status": "error", "message": "Chiave mancante"})
 
 
-# === Ricerca ===
+# === 🛒 Ricerca prodotti ===
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
+    global client
+    if not client:
+        init_openai_client()
+
     if not client:
         return jsonify({"errore": "OpenAI client non inizializzato"}), 500
 
@@ -48,7 +57,7 @@ def search(query):
         Ogni oggetto deve avere:
         - nome
         - descrizione
-        - prezzo (in euro)
+        - prezzo in euro realistico
         """
 
         response = client.responses.create(
@@ -65,4 +74,8 @@ def search(query):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
+    init_openai_client()
     app.run(host="0.0.0.0", port=port)
+else:
+    # Render / Gunicorn entrypoint
+    init_openai_client()
