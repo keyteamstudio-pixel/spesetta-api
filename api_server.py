@@ -9,10 +9,15 @@ CORS(app)
 # ✅ Legge la chiave da variabili d'ambiente
 api_key = os.getenv("OPENAI_API_KEY")
 
+client = None
 if api_key:
-    client = OpenAI(api_key=api_key)
+    try:
+        # Inizializzazione sicura (senza proxy)
+        client = OpenAI(api_key=api_key, base_url="https://api.openai.com/v1")
+        print("✅ Client OpenAI inizializzato correttamente.")
+    except Exception as e:
+        print(f"⚠️ Errore inizializzazione client: {e}")
 else:
-    client = None
     print("⚠️ Nessuna chiave OpenAI trovata. Imposta OPENAI_API_KEY su Render.")
 
 @app.route("/")
