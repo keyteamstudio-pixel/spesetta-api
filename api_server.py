@@ -12,7 +12,7 @@ api_key = os.getenv("OPENAI_API_KEY")
 client = None
 if api_key:
     try:
-        # Inizializzazione sicura (senza proxy)
+        # Inizializzazione client OpenAI SENZA proxy
         client = OpenAI(api_key=api_key, base_url="https://api.openai.com/v1")
         print("✅ Client OpenAI inizializzato correttamente.")
     except Exception as e:
@@ -22,11 +22,12 @@ else:
 
 @app.route("/")
 def home():
+    """Home page API"""
     return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
 @app.route("/api/test-key", methods=["GET"])
 def test_key():
-    """Verifica se la chiave è stata trovata"""
+    """Verifica se la chiave OpenAI è presente"""
     if api_key:
         return jsonify({"status": "ok", "message": "Chiave trovata ✅"})
     else:
@@ -34,7 +35,7 @@ def test_key():
 
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
-    """Esegue una ricerca di prodotti simulata"""
+    """Ricerca simulata prodotti"""
     if not client:
         return jsonify({"errore": "OpenAI client non inizializzato"}), 500
 
