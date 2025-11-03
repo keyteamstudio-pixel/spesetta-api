@@ -1,39 +1,35 @@
 import os
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 from openai import OpenAI
 
 app = Flask(__name__)
 CORS(app)
 
-# === 🔐 Lettura chiave OpenAI ===
+# === Chiave API ===
 api_key = os.getenv("OPENAI_API_KEY")
-
 print("🔍 OPENAI_API_KEY:", "Trovata ✅" if api_key else "❌ NON trovata")
-client = None
 
 
-def init_openai_client():
-    """Inizializza il client OpenAI solo se la chiave è valida."""
-    global client
-    if api_key:
-        try:
-            os.environ["OPENAI_API_KEY"] = api_key
-            client = OpenAI()
-            print("✅ Client OpenAI inizializzato correttamente!")
-        except Exception as e:
-            print("🚨 Errore durante inizializzazione OpenAI:", str(e))
-    else:
-        print("⚠️ Nessuna chiave trovata in ambiente, impossibile inizializzare.")
+def get_openai_client():
+    """Inizializza e restituisce un client OpenAI ogni volta che serve."""
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        raise Exception("Chiave OpenAI non trovata")
+    try:
+        client = OpenAI(api_key=key)
+        return client
+    except Exception as e:
+        raise Exception(f"Errore creazione client OpenAI: {e}")
 
 
-# === 🌐 Endpoint base ===
+# === Endpoint base ===
 @app.route("/")
 def home():
     return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
 
-# === 🔑 Test chiave ===
+# === Test chiave ===
 @app.route("/api/test-key")
 def test_key():
     if api_key:
@@ -41,17 +37,12 @@ def test_key():
     return jsonify({"status": "error", "message": "Chiave mancante"})
 
 
-# === 🛒 Ricerca prodotti ===
+# === Endpoint di ricerca ===
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
-    global client
-    if not client:
-        init_openai_client()
-
-    if not client:
-        return jsonify({"errore": "OpenAI client non inizializzato"}), 500
-
     try:
+        client = get_openai_client()
+
         prompt = f"""
         Genera un elenco JSON con 5 prodotti alimentari relativi a "{query}".
         Ogni oggetto deve avere:
@@ -68,14 +59,11 @@ def search(query):
 
         raw_output = response.output[0].content[0].text
         return jsonify({"query": query, "risultati": {"raw": raw_output}})
+
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
-    init_openai_client()
     app.run(host="0.0.0.0", port=port)
-else:
-    # Render / Gunicorn entrypoint
-    init_openai_client()
