@@ -6,41 +6,37 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# === 🔐 Lettura chiave OpenAI ===
+# === Lettura chiave ===
 api_key = os.getenv("OPENAI_API_KEY")
-
-print("🔍 Chiave trovata:", "SI" if api_key else "NO")
-print("🔑 Lunghezza chiave:", len(api_key) if api_key else "Nessuna")
+print("🔍 OPENAI_API_KEY:", "Trovata ✅" if api_key else "❌ NON trovata")
 
 client = None
-if api_key:
-    try:
-        # Imposta la chiave come variabile d’ambiente per il nuovo SDK
-        os.environ["OPENAI_API_KEY"] = api_key
-        client = OpenAI()  # nessun argomento necessario
-        print("✅ Client OpenAI inizializzato correttamente (nuovo metodo).")
-    except Exception as e:
-        print("⚠️ Errore inizializzazione client:", str(e))
-else:
-    print("❌ Nessuna chiave OPENAI_API_KEY trovata in ambiente.")
+try:
+    if api_key:
+        os.environ["OPENAI_API_KEY"] = api_key  # Forza impostazione
+        client = OpenAI()  # nuovo SDK: legge la chiave dall’ambiente
+        print("✅ Client OpenAI inizializzato correttamente!")
+    else:
+        print("⚠️ Nessuna chiave trovata in ambiente.")
+except Exception as e:
+    print("🚨 Errore inizializzazione client:", e)
 
 
-# === 🧪 Endpoint base ===
+# === Test base ===
 @app.route("/")
 def home():
     return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
 
-# === 🔍 Test chiave ===
+# === Test chiave ===
 @app.route("/api/test-key")
 def test_key():
     if api_key:
-        return jsonify({"status": "ok", "message": f"Chiave trovata: {api_key[:10]}..."})
-    else:
-        return jsonify({"status": "error", "message": "Chiave mancante o non letta"})
+        return jsonify({"status": "ok", "message": f"Chiave letta: {api_key[:10]}..."})
+    return jsonify({"status": "error", "message": "Chiave mancante"})
 
 
-# === 🔎 Endpoint ricerca prodotti ===
+# === Ricerca ===
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
     if not client:
@@ -48,21 +44,21 @@ def search(query):
 
     try:
         prompt = f"""
-        Genera un elenco JSON di 5 prodotti da supermercato relativi a "{query}",
-        ciascuno con nome, descrizione e prezzo realistico in euro.
+        Genera un elenco JSON con 5 prodotti alimentari relativi a "{query}".
+        Ogni oggetto deve avere:
+        - nome
+        - descrizione
+        - prezzo (in euro)
         """
 
-        # Usa il nuovo endpoint compatibile con openai>=1.0
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=prompt,
             response_format={"type": "json_object"}
         )
 
-        # Estrai il testo dal contenuto del modello
         raw_output = response.output[0].content[0].text
         return jsonify({"query": query, "risultati": {"raw": raw_output}})
-
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
