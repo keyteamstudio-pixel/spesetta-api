@@ -6,38 +6,31 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# === Chiave API ===
-api_key = os.getenv("OPENAI_API_KEY")
-print("🔍 OPENAI_API_KEY:", "Trovata ✅" if api_key else "❌ NON trovata")
-
+# --- INSERISCI QUI LA TUA CHIAVE DIRETTA ---
+OPENAI_KEY = "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"
+# -------------------------------------------
 
 def get_openai_client():
-    """Inizializza e restituisce un client OpenAI ogni volta che serve."""
-    key = os.getenv("OPENAI_API_KEY")
-    if not key:
-        raise Exception("Chiave OpenAI non trovata")
+    """Inizializza il client OpenAI in modo esplicito."""
     try:
-        client = OpenAI(api_key=key)
+        client = OpenAI(api_key=OPENAI_KEY)
         return client
     except Exception as e:
         raise Exception(f"Errore creazione client OpenAI: {e}")
 
 
-# === Endpoint base ===
 @app.route("/")
 def home():
     return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
 
-# === Test chiave ===
 @app.route("/api/test-key")
 def test_key():
-    if api_key:
-        return jsonify({"status": "ok", "message": f"Chiave trovata: {api_key[:10]}..."})
+    if OPENAI_KEY:
+        return jsonify({"status": "ok", "message": f"Chiave trovata: {OPENAI_KEY[:10]}..."})
     return jsonify({"status": "error", "message": "Chiave mancante"})
 
 
-# === Endpoint di ricerca ===
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
     try:
@@ -48,7 +41,7 @@ def search(query):
         Ogni oggetto deve avere:
         - nome
         - descrizione
-        - prezzo in euro realistico
+        - prezzo realistico in euro
         """
 
         response = client.responses.create(
