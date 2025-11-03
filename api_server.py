@@ -6,15 +6,12 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# --- INSERISCI QUI LA TUA CHIAVE DIRETTA ---
+# === CHIAVE DIRETTA ===
 OPENAI_KEY = "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"
-# -------------------------------------------
 
 def get_openai_client():
-    """Inizializza il client OpenAI in modo esplicito."""
     try:
-        client = OpenAI(api_key=OPENAI_KEY)
-        return client
+        return OpenAI(api_key=OPENAI_KEY)
     except Exception as e:
         raise Exception(f"Errore creazione client OpenAI: {e}")
 
@@ -35,7 +32,6 @@ def test_key():
 def search(query):
     try:
         client = get_openai_client()
-
         prompt = f"""
         Genera un elenco JSON con 5 prodotti alimentari relativi a "{query}".
         Ogni oggetto deve avere:
@@ -43,16 +39,13 @@ def search(query):
         - descrizione
         - prezzo realistico in euro
         """
-
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=prompt,
             response_format={"type": "json_object"}
         )
-
         raw_output = response.output[0].content[0].text
         return jsonify({"query": query, "risultati": {"raw": raw_output}})
-
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
