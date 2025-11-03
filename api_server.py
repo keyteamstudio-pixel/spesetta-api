@@ -15,26 +15,30 @@ print("🔑 Lunghezza chiave:", len(api_key) if api_key else "Nessuna")
 client = None
 if api_key:
     try:
-        os.environ["OPENAI_API_KEY"] = api_key  # imposta la variabile per sicurezza
-        client = OpenAI()  # ora usa l’ambiente, senza passare argomenti
+        # Imposta la chiave come variabile d’ambiente per il nuovo SDK
+        os.environ["OPENAI_API_KEY"] = api_key
+        client = OpenAI()  # nessun argomento necessario
         print("✅ Client OpenAI inizializzato correttamente (nuovo metodo).")
     except Exception as e:
         print("⚠️ Errore inizializzazione client:", str(e))
 else:
     print("❌ Nessuna chiave OPENAI_API_KEY trovata in ambiente.")
 
-# === 🧪 Endpoint test per verificare che l’API risponda ===
+
+# === 🧪 Endpoint base ===
 @app.route("/")
 def home():
     return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
-# === 🔍 Test per controllare se la chiave è letta ===
+
+# === 🔍 Test chiave ===
 @app.route("/api/test-key")
 def test_key():
     if api_key:
         return jsonify({"status": "ok", "message": f"Chiave trovata: {api_key[:10]}..."})
     else:
         return jsonify({"status": "error", "message": "Chiave mancante o non letta"})
+
 
 # === 🔎 Endpoint ricerca prodotti ===
 @app.route("/api/search/<query>", methods=["GET"])
@@ -48,13 +52,14 @@ def search(query):
         ciascuno con nome, descrizione e prezzo realistico in euro.
         """
 
+        # Usa il nuovo endpoint compatibile con openai>=1.0
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=prompt,
-            response_format={"type": "json"}
+            response_format={"type": "json_object"}
         )
 
-        # Prendi il testo generato
+        # Estrai il testo dal contenuto del modello
         raw_output = response.output[0].content[0].text
         return jsonify({"query": query, "risultati": {"raw": raw_output}})
 
