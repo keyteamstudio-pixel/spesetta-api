@@ -1,67 +1,53 @@
-import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
+import os
 from openai import OpenAI
 
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 Recupera la chiave OpenAI
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-client = None
+# 🔑 Legge la chiave API da Railway
+api_key = os.environ.get("OPENAI_API_KEY")
 
-if OPENAI_KEY:
+print("🔍 Chiave trovata:", "SI" if api_key else "NO")
+
+client = None
+if api_key:
     try:
-        client = OpenAI(api_key=OPENAI_KEY)
-        print("✅ Client OpenAI inizializzato correttamente.")
+        client = OpenAI(api_key=api_key)
+        print("✅ Client OpenAI inizializzato.")
     except Exception as e:
-        print(f"⚠️ Errore inizializzazione client OpenAI: {e}")
+        print("⚠️ Errore creazione client:", e)
 else:
-    print("❌ Nessuna chiave trovata. Imposta OPENAI_API_KEY su Railway.")
+    print("❌ Nessuna chiave API trovata!")
 
 @app.route("/")
 def home():
-    return jsonify({
-        "status": "ok",
-        "message": "API Spesetta attiva su Railway 🛒",
-        "client_inizializzato": client is not None
-    })
+    return jsonify({"status": "ok", "message": "API Spesetta attiva su Railway 🛒"})
 
 @app.route("/api/test-key")
 def test_key():
-    if OPENAI_KEY:
-        return jsonify({
-            "status": "ok",
-            "message": f"Chiave trovata: {OPENAI_KEY[:10]}...",
-            "client_inizializzato": client is not None
-        })
+    if api_key:
+        return jsonify({"message": f"Chiave trovata: {api_key[:10]}...", "status": "ok"})
     else:
-        return jsonify({"status": "error", "message": "Chiave mancante"})
+        return jsonify({"errore": "Chiave non trovata"}), 500
 
-@app.route("/api/search/<query>", methods=["GET"])
+@app.route("/api/search/<query>")
 def search(query):
     if not client:
         return jsonify({"errore": "OpenAI client non inizializzato"}), 500
     try:
-        prompt = f"""
-        Genera un elenco JSON con 5 prodotti alimentari relativi a "{query}".
-        Ogni oggetto deve avere:
-        - nome
-        - descrizione
-        - prezzo realistico in euro
-        """
         response = client.responses.create(
             model="gpt-4.1-mini",
-            input=prompt,
-            response_format={"type": "json_object"}
+            input=f"Restituisci un elenco di 5 prodotti alimentari relativi a '{query}' in formato JSON con nome, descrizione e prezzo."
         )
-        content = response.output[0].content[0].text
-        return jsonify({"query": query, "risultati": {"raw": content}})
+        return jsonify({
+            "query": query,
+            "risultati": response.output_text
+        })
     except Exception as e:
-        return jsonify({"errore": str(e)}), 500
+        return jsonify({"errore": f"Errore OpenAI: {e}"}), 500
 
-# 👇 Qui è il punto critico su Railway: deve ascoltare sulla porta fornita da Railway
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    print(f"🚀 Server in ascolto sulla porta {port}")
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
