@@ -15,8 +15,9 @@ print("🔑 Lunghezza chiave:", len(api_key) if api_key else "Nessuna")
 client = None
 if api_key:
     try:
-        client = OpenAI(api_key=api_key)
-        print("✅ Client OpenAI inizializzato correttamente.")
+        os.environ["OPENAI_API_KEY"] = api_key  # imposta la variabile per sicurezza
+        client = OpenAI()  # ora usa l’ambiente, senza passare argomenti
+        print("✅ Client OpenAI inizializzato correttamente (nuovo metodo).")
     except Exception as e:
         print("⚠️ Errore inizializzazione client:", str(e))
 else:
