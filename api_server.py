@@ -3,27 +3,32 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from openai import OpenAI
 
+# 🚀 Inizializza Flask
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 Usa la chiave da variabile d'ambiente
+# 🔑 Legge la chiave API
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 
-# ✅ Client OpenAI conforme alle docs ufficiali
+# 🔧 Inizializza client OpenAI secondo la documentazione ufficiale
 client = None
 if OPENAI_KEY:
     try:
         client = OpenAI(api_key=OPENAI_KEY)
-        print("✅ Client OpenAI inizializzato correttamente.")
+        print("✅ Client OpenAI inizializzato con successo.")
     except Exception as e:
-        print(f"⚠️ Errore inizializzazione client: {e}")
+        print(f"⚠️ Errore durante l'inizializzazione del client OpenAI: {e}")
 else:
     print("❌ Nessuna chiave trovata. Imposta OPENAI_API_KEY su Railway.")
 
 
 @app.route("/")
 def home():
-    return jsonify({"status": "ok", "message": "API Spesetta attiva su Railway 🛒"})
+    return jsonify({
+        "status": "ok",
+        "message": "API Spesetta attiva su Railway 🛒",
+        "client": client is not None
+    })
 
 
 @app.route("/api/test-key")
@@ -40,7 +45,7 @@ def test_key():
 
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
-    if client is None:
+    if not client:
         return jsonify({"errore": "OpenAI client non inizializzato"}), 500
 
     try:
@@ -58,13 +63,15 @@ def search(query):
             response_format={"type": "json_object"}
         )
 
-        contenuto = response.output[0].content[0].text
-        return jsonify({"query": query, "risultati": {"raw": contenuto}})
+        content = response.output[0].content[0].text
+        return jsonify({"query": query, "risultati": {"raw": content}})
 
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
 
+# ✅ Avvia correttamente su Railway
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
+    print(f"🚀 Server in ascolto sulla porta {port}")
     app.run(host="0.0.0.0", port=port)
