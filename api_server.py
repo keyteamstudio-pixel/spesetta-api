@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from openai import OpenAI
 import os
@@ -6,59 +6,52 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Recupera le chiavi dalle variabili di ambiente
-openai_key = os.environ.get("OPENAI_API_KEY")
-google_key = os.environ.get("GOOGLE_API_KEY")
+# ✅ Legge la chiave da variabili d'ambiente
+api_key = os.getenv("OPENAI_API_KEY")
 
-# Inizializza il client OpenAI solo se la chiave è presente
-if openai_key:
-    client = OpenAI(api_key=openai_key)
-    print("✅ Client OpenAI inizializzato correttamente")
+if api_key:
+    client = OpenAI(api_key=api_key)
 else:
     client = None
-    print("❌ Nessuna chiave OPENAI_API_KEY trovata")
+    print("⚠️ Nessuna chiave OpenAI trovata. Imposta OPENAI_API_KEY su Render.")
 
 @app.route("/")
 def home():
-    return jsonify({
-        "status": "ok",
-        "message": "API Spesetta attiva 🛒",
-        "openai_client": bool(client),
-        "google_api_key": bool(google_key)
-    })
+    return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
-@app.route("/api/test-key")
+@app.route("/api/test-key", methods=["GET"])
 def test_key():
-    return jsonify({
-        "status": "ok",
-        "openai_key": f"{openai_key[:10]}..." if openai_key else None,
-        "google_key": f"{google_key[:10]}..." if google_key else None
-    })
+    """Verifica se la chiave è stata trovata"""
+    if api_key:
+        return jsonify({"status": "ok", "message": "Chiave trovata ✅"})
+    else:
+        return jsonify({"status": "error", "message": "Chiave NON trovata ⚠️"}), 400
 
-@app.route("/api/search/<query>")
+@app.route("/api/search/<query>", methods=["GET"])
 def search(query):
+    """Esegue una ricerca di prodotti simulata"""
     if not client:
         return jsonify({"errore": "OpenAI client non inizializzato"}), 500
 
-    try:
-        prompt = f"""
-        Genera una lista in formato JSON con 5 prodotti da supermercato realistici relativi alla ricerca "{query}".
-        Per ciascun prodotto includi:
-        - nome
-        - descrizione breve
-        - prezzo medio in euro (float)
-        """
+    prompt = f"""
+    Genera un JSON con 5 prodotti alimentari legati a '{query}', con nome, descrizione breve e prezzo realistico in euro.
+    Esempio formato:
+    [
+      {{"nome": "Pasta", "descrizione": "Spaghetti di grano duro", "prezzo": 1.20}}
+    ]
+    """
 
+    try:
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=prompt,
-            temperature=0.7
+            temperature=0.8,
         )
-
-        result = response.output[0].content[0].text
-        return jsonify({"query": query, "prodotti": result})
+        testo = response.output[0].content[0].text
+        return jsonify({"query": query, "risultati": {"raw": testo}})
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
