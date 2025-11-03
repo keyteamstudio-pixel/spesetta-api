@@ -6,14 +6,15 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# === CHIAVE DIRETTA ===
-OPENAI_KEY = "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"
+# 🔑 Legge la chiave da variabile d'ambiente, fallback diretto per Render
+OPENAI_KEY = os.getenv("OPENAI_API_KEY") or "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"
 
-def get_openai_client():
-    try:
-        return OpenAI(api_key=OPENAI_KEY)
-    except Exception as e:
-        raise Exception(f"Errore creazione client OpenAI: {e}")
+# ✅ Inizializza il client seguendo la documentazione ufficiale
+try:
+    client = OpenAI(api_key=OPENAI_KEY)
+except Exception as e:
+    client = None
+    print(f"⚠️ Errore inizializzazione client OpenAI: {e}")
 
 
 @app.route("/")
@@ -24,14 +25,21 @@ def home():
 @app.route("/api/test-key")
 def test_key():
     if OPENAI_KEY:
-        return jsonify({"status": "ok", "message": f"Chiave trovata: {OPENAI_KEY[:10]}..."})
-    return jsonify({"status": "error", "message": "Chiave mancante"})
+        return jsonify({
+            "status": "ok",
+            "message": f"Chiave trovata: {OPENAI_KEY[:10]}...",
+            "client_inizializzato": client is not None
+        })
+    else:
+        return jsonify({"status": "error", "message": "Chiave mancante"})
 
 
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
+    if client is None:
+        return jsonify({"errore": "OpenAI client non inizializzato"}), 500
+
     try:
-        client = get_openai_client()
         prompt = f"""
         Genera un elenco JSON con 5 prodotti alimentari relativi a "{query}".
         Ogni oggetto deve avere:
@@ -39,13 +47,18 @@ def search(query):
         - descrizione
         - prezzo realistico in euro
         """
+
+        # ✅ API moderna secondo docs ufficiale
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=prompt,
             response_format={"type": "json_object"}
         )
-        raw_output = response.output[0].content[0].text
-        return jsonify({"query": query, "risultati": {"raw": raw_output}})
+
+        # Estrae l'output JSON
+        content = response.output[0].content[0].text
+        return jsonify({"query": query, "risultati": {"raw": content}})
+
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
 
