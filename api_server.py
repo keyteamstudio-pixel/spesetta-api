@@ -12,9 +12,15 @@ api_key = os.getenv("OPENAI_API_KEY")
 client = None
 if api_key:
     try:
-        # Inizializzazione client OpenAI SENZA proxy
-        client = OpenAI(api_key=api_key, base_url="https://api.openai.com/v1")
+        # ✅ Creiamo un client SENZA toccare i proxy
+        client = OpenAI(api_key=api_key)
         print("✅ Client OpenAI inizializzato correttamente.")
+    except TypeError:
+        # 🔥 Fix per errore 'proxies' su Render
+        import openai
+        openai.api_key = api_key
+        client = openai
+        print("✅ Client OpenAI inizializzato in modalità compatibilità (fix proxies).")
     except Exception as e:
         print(f"⚠️ Errore inizializzazione client: {e}")
 else:
@@ -22,12 +28,10 @@ else:
 
 @app.route("/")
 def home():
-    """Home page API"""
     return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
 
 @app.route("/api/test-key", methods=["GET"])
 def test_key():
-    """Verifica se la chiave OpenAI è presente"""
     if api_key:
         return jsonify({"status": "ok", "message": "Chiave trovata ✅"})
     else:
@@ -35,7 +39,6 @@ def test_key():
 
 @app.route("/api/search/<query>", methods=["GET"])
 def search(query):
-    """Ricerca simulata prodotti"""
     if not client:
         return jsonify({"errore": "OpenAI client non inizializzato"}), 500
 
@@ -48,12 +51,21 @@ def search(query):
     """
 
     try:
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt,
-            temperature=0.8,
-        )
-        testo = response.output[0].content[0].text
+        # Compatibile sia con OpenAI v1 che con vecchio SDK
+        if hasattr(client, "responses"):
+            response = client.responses.create(
+                model="gpt-4.1-mini",
+                input=prompt,
+                temperature=0.8,
+            )
+            testo = response.output[0].content[0].text
+        else:
+            completion = client.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            testo = completion.choices[0].message["content"]
+
         return jsonify({"query": query, "risultati": {"raw": testo}})
     except Exception as e:
         return jsonify({"errore": str(e)}), 500
