@@ -5,18 +5,22 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# ✅ Legge la chiave OpenAI dall'ambiente
+# --- Configurazione chiave ---
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    print("❌ Nessuna chiave API trovata.")
+    print("❌ Nessuna chiave trovata in OPENAI_API_KEY.")
 else:
-    print(f"✅ Chiave trovata: {api_key[:8]}...")
+    print("✅ Chiave OpenAI trovata.")
 
+# --- Inizializzazione client ---
+client = None
 try:
     client = OpenAI(api_key=api_key)
+    print("✅ Client OpenAI inizializzato correttamente.")
 except Exception as e:
     print(f"⚠️ Errore creazione client OpenAI: {e}")
-    client = None
+
+# --- ROUTES ---
 
 @app.route("/")
 def home():
@@ -31,18 +35,32 @@ def test_key():
 
 @app.route("/api/search")
 def search():
-    query = request.args.get("q", "")
-    if not client:
-        return jsonify({"errore": "Client OpenAI non inizializzato"}), 500
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"errore": "Parametro 'q' mancante"}), 400
+
+    if client is None:
+        return jsonify({"errore": "OpenAI client non inizializzato"}), 500
 
     try:
-        prompt = f"Genera 5 prodotti alimentari legati a '{query}', con nome, descrizione breve e prezzo medio in euro. Rispondi in JSON."
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt
+        prompt = (
+            f"Genera 5 prodotti alimentari legati a '{query}', "
+            "ognuno con nome, descrizione breve e prezzo medio in euro. "
+            "Rispondi solo in JSON puro, senza testo extra."
         )
 
-        text = response.output[0].content[0].text
+        # --- nuova sintassi compatibile con openai>=1.0 ---
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Sei un assistente che restituisce risposte in JSON."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        text = response.choices[0].message.content.strip()
+
+        # Prova a convertire in JSON, altrimenti restituisci testo grezzo
         try:
             data = json.loads(text)
         except Exception:
