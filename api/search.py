@@ -1,77 +1,59 @@
-from openai import OpenAI
 import os
 import json
-import traceback
+from flask import Flask, request, jsonify
+from openai import OpenAI
 
-def handler(request, response):
+app = Flask(__name__)
+
+# ✅ Legge la chiave OpenAI dall'ambiente
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    print("❌ Nessuna chiave API trovata.")
+else:
+    print(f"✅ Chiave trovata: {api_key[:8]}...")
+
+try:
+    client = OpenAI(api_key=api_key)
+except Exception as e:
+    print(f"⚠️ Errore creazione client OpenAI: {e}")
+    client = None
+
+@app.route("/")
+def home():
+    return jsonify({"status": "ok", "message": "API Spesetta attiva 🛒"})
+
+@app.route("/api/test-key")
+def test_key():
+    if api_key:
+        return jsonify({"status": "ok", "message": f"Chiave trovata: {api_key[:10]}..."})
+    else:
+        return jsonify({"errore": "Chiave non trovata"})
+
+@app.route("/api/search")
+def search():
+    query = request.args.get("q", "")
+    if not client:
+        return jsonify({"errore": "Client OpenAI non inizializzato"}), 500
+
     try:
-        # Log di debug iniziale
-        print("🔹 Avvio funzione /api/search")
-
-        # Recupero chiave API
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            print("❌ Chiave API non trovata")
-            response.status_code = 500
-            response.body = json.dumps({"errore": "Chiave API mancante"})
-            return response
-
-        print("✅ Chiave API trovata, inizializzo client...")
-
-        # Inizializzo il client OpenAI
-        client = OpenAI(api_key=api_key)
-
-        # Recupero la query dall’URL
-        query = request.query_params.get("q", ["pasta"])[0]
-        print(f"🧠 Query ricevuta: {query}")
-
-        # Prompt per il modello
-        prompt = f"""
-        Genera un elenco di 5 prodotti pertinenti a '{query}' in formato JSON.
-        Ogni oggetto deve contenere:
-        - nome
-        - descrizione
-        - prezzo
-        Rispondi SOLO con JSON valido.
-        """
-
-        print("📤 Invio richiesta a OpenAI...")
-
-        # Chiamata al modello GPT-4.1-mini
-        ai_response = client.responses.create(
+        prompt = f"Genera 5 prodotti alimentari legati a '{query}', con nome, descrizione breve e prezzo medio in euro. Rispondi in JSON."
+        response = client.responses.create(
             model="gpt-4.1-mini",
-            input=prompt,
-            temperature=0.5
+            input=prompt
         )
 
-        print("📥 Risposta ricevuta da OpenAI")
-
-        # Estrai testo generato
-        text = ai_response.output_text.strip()
-
-        # Pulisci eventuali blocchi di markdown
-        if text.startswith("```"):
-            text = text.replace("```json", "").replace("```", "").strip()
-
-        # Provo a convertire in JSON
+        text = response.output[0].content[0].text
         try:
-            prodotti = json.loads(text)
-        except json.JSONDecodeError:
-            print("⚠️ Testo non in formato JSON, lo ritorno grezzo")
-            prodotti = {"output_raw": text}
+            data = json.loads(text)
+        except Exception:
+            data = {"raw": text}
 
-        # Risposta finale
-        response.status_code = 200
-        response.body = json.dumps({
-            "query": query,
-            "risultati": prodotti
-        })
-
-        print("✅ Risposta inviata con successo")
+        return jsonify({"query": query, "risultati": data})
 
     except Exception as e:
-        error_message = f"Errore interno: {str(e)}"
-        print("❌ Exception catturata:", error_message)
-        print(traceback.format_exc())
-        response.status_code = 500
-        response.body = json.dumps({"errore": error_message})
+        print(f"❌ Errore durante la generazione: {e}")
+        return jsonify({"errore": str(e)}), 500
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
